@@ -1,3 +1,5 @@
+import 'p5';
+
 let video1, video2;
 let faceMesh1, faceMesh2;
 let vidW, vidH;
@@ -93,7 +95,9 @@ function windowResized() {
     resizeCanvas(windowWidth, windowHeight);
 }
 
+console.log("outside");
 function draw() {
+    console.log("inside");
     background(0);
 
     if (checkShowWebcam()) return;
@@ -424,12 +428,355 @@ function mousePressed() {
         fullscreen(!fs);
     }
 }
-// let lineCount = 0;
-// let emojiW = 20;
-// for (let y = 0; y < height; y += height / 37) {
-//     let xOffset = lineCount % 2 == 0 ? 0 : off;
-//     lineCount++;
-//     for (let x = playerZoneWidth; x < width - playerZoneWidth + emojiW; x += (width - playerZoneWidth * 2) / 15) {
-//         text(noseEmoji, x + xOffset, y);
-//     }
-// }
+
+class Player {
+    constructor(face, color, video, centerX, centerY) {
+        this.face = face;
+        this.color = color;
+        this.video = video;
+        this.centerX = centerX;
+        this.centerY = centerY;
+
+        this.score = 0;
+
+        this.tx = 0;
+        this.ty = 0;
+
+        this.noseX = null;
+        this.noseY = null;
+        this.lastX = null;
+        this.lastY = null;
+
+        this.sizeMult = 1;
+        this.truePaddleWidth = paddleW;
+        this.truePaddleHeight = paddleH;
+
+        this.hasSunglasses = false;
+        this.hasSadEyes = false;
+
+        this.Sides = Object.freeze({
+            LEFT: Symbol('left'),
+            RIGHT: Symbol('right'),
+            TOP: Symbol('top'),
+            BOTTOM: Symbol('bottom')
+        });
+
+    }
+
+    draw() {
+        push();
+        clip(() => rect(this.centerX - playerZoneWidth / 2, this.centerY / height / 2, playerZoneWidth, height));
+        rectMode(CORNER);
+        push();
+        translate(this.video.width + this.tx, this.ty);
+        scale(-1, 1);
+        image(this.video, 0, 0);
+        pop();
+        // push();
+        // translate(this.tx, this.ty);
+        // identifyKeypoints();
+        // pop();
+
+        this.truePaddleWidth = paddleW * this.sizeMult;
+        this.truePaddleHeight = paddleH * this.sizeMult;
+
+        let nose = this.face.nose();
+        if (nose) {
+            this.lastX = this.noseX;
+            this.lastY = this.noseY;
+
+            let xLo = this.centerX - playerZoneWidth / 2 + this.truePaddleWidth / 2;
+            let xHi = this.centerX + playerZoneWidth / 2 - this.truePaddleWidth / 2;
+            this.noseX = constrain(this.tx + nose.x, xLo, xHi);
+            if (this.lastX) this.noseX = lerp(this.lastX, this.noseX, paddleLerp);
+
+            let yLo = this.truePaddleHeight / 2;
+            let yHi = height - this.truePaddleHeight / 2;
+            this.noseY = constrain(this.ty + nose.y, yLo, yHi);
+            if (this.lastY) this.noseY = lerp(this.lastY, this.noseY, paddleLerp);
+        }
+        else {
+            this.noseX = this.lastX;
+            this.noseY = this.lastY;
+        };
+
+        push();
+        rectMode(CENTER);
+        fill(this.color);
+        rect(this.noseX, this.noseY, this.truePaddleWidth, this.truePaddleHeight);
+        pop();
+
+        let face = this.face.face();
+        let faceOval = this.face.faceOval();
+
+        if (!face || !faceOval) { pop(); return; }
+
+        let mouthSizeRatio = (face.keypoints[14].y - face.keypoints[13].y)/height
+        this.sizeMult = map(mouthSizeRatio, 0, 0.2, 1, 1.3)
+
+        if (this.hasSunglasses) {
+            let x = this.tx + faceOval.centerX;
+            let y = this.ty + (face.leftEye.centerY + face.rightEye.centerY) / 2;
+            let sunglassesW = face.keypoints[356].x - face.keypoints[93].x;
+            let sunglassesH = face.keypoints[5].y - face.keypoints[151].y;
+            imageMode(CENTER);
+            image(sunglasses, x, y, sunglassesW, sunglassesH);
+        }
+        else if (this.hasSadEyes) {
+            let x = this.noseX;
+            let y = this.ty + (face.leftEye.centerY + face.rightEye.centerY) / 2;
+            let eyesW = faceOval.width * 0.91;
+            let eyesH = face.keypoints[1].y - face.keypoints[151].y;
+            imageMode(CENTER);
+            image(sadEyes, x, y, eyesW, eyesH);
+        }
+        pop();
+    }
+
+    calibrate() {
+        this.scale();
+        setTimeout(() => this.translate(), 500);
+    }
+
+    scale() {
+        let faceOval = this.face.faceOval();
+        let faceScale = (height * 0.9) / faceOval.height;
+        this.video.size(this.video.width * faceScale, this.video.height * faceScale);
+    }
+
+    translate() {
+        let nose = this.face.nose();
+        this.lastNose = nose;
+
+        this.tx = this.centerX - nose.x;
+        this.ty = this.centerY - nose.y - 30;
+    }
+
+
+    xVel() {
+        return this.noseX - this.lastX;
+    }
+
+    yVel() {
+        return this.noseY - this.lastY;
+    }
+
+    reset() {
+        this.score = 0;
+        this.video.size(defaultWebcamWidth, defaultWebcamHeight);
+        this.resetCosmetics();
+
+    }
+
+    resetCosmetics() {
+        this.hasSadEyes = false;
+        this.hasSunglasses = false;
+    }
+}
+
+class Face {
+    constructor(faceIx) {
+        this.faceIx = faceIx;
+    }
+
+    face() {
+        return faces[this.faceIx];
+    }
+
+    nose() {
+        let face = this.face();
+        if (face) return face.keypoints[4];
+        else return null;
+    }
+
+    faceOval() {
+        let face = this.face();
+        if (face) return face.faceOval;
+        else return null;
+    }
+}
+
+class Ball {
+    constructor() {
+        this.minXSpeed = width / (4 * frameRate());
+        this.maxXSpeed = width / (1.5 * frameRate());
+        this.maxYSpeed = height / (1 * frameRate());
+        this.xSpeedup = 1.03;
+
+        this.x = width / 2;
+        this.y = height / 2;
+
+        let xMult = random(1) > 0.5 ? 1 : -1;
+
+        this.xSpeed = random(this.minXSpeed, this.maxXSpeed * 0.5) * xMult;
+        this.ySpeed = random(-this.maxYSpeed, this.maxYSpeed) * 0.25;
+        this.color = this.xSpeed > 0 ? PlayerColor.RED : PlayerColor.BLUE;
+        this.lastCollidedWith = null;
+
+        this.d = paddleH * 0.333;
+        this.xDamp = 0.7;
+
+        ballUpdateTs = now;
+
+        player1.hasSunglasses = false;
+        player1.hasSadEyes = false;
+        player2.hasSunglasses = false;
+        player2.hasSadEyes = false;
+    }
+
+    bounceSound() {
+        let rate = random(0.75, 1.25);
+        goose.rate(rate);
+        goose.play();
+    }
+
+    draw() {
+
+        fill(this.color);
+        circle(this.x, this.y, this.d);
+
+        this.x += this.xSpeed;
+        this.y += this.ySpeed;
+
+
+        if (this.y <= this.d / 2 || height - this.d / 2 <= this.y) {
+            this.ySpeed *= -1;
+            this.lastCollidedWith = null;
+            this.bounceSound();
+        }
+
+        this.checkCollisions(player1);
+        this.checkCollisions(player2);
+    }
+
+    checkCollisions(player) {
+        if (this.lastCollidedWith == player.color) return;
+
+        let bounds = {
+            xMin: player.noseX - player.truePaddleWidth / 2,
+            xMax: player.noseX + player.truePaddleWidth / 2,
+            yMin: player.noseY - player.truePaddleHeight / 2,
+            yMax: player.noseY + player.truePaddleHeight / 2,
+        };
+
+        let didCollide = false;
+        
+        if (collideLineCircle(bounds.xMin, bounds.yMin, bounds.xMin, bounds.yMax, this.x, this.y, this.d)) {
+            debugLog(`${player.color} left`);
+            this.xSpeed = -abs(this.xSpeed) * this.xDamp + player.xVel();
+            this.ySpeed += player.yVel();
+            didCollide = true;
+        }    
+        else if (collideLineCircle(bounds.xMax, bounds.yMin, bounds.xMax, bounds.yMax, this.x, this.y, this.d)) {
+            debugLog(`${player.color} right`);
+            this.xSpeed = abs(this.xSpeed) * this.xDamp * this.xDamp + player.xVel();
+            this.ySpeed += player.yVel();
+            didCollide = true;
+        }    
+        else if (collideLineCircle(bounds.xMin, bounds.yMin, bounds.xMax, bounds.yMin, this.x, this.y, this.d)) {
+            debugLog(`${player.color} top`);
+            this.ySpeed = -abs(this.ySpeed) + min(0, player.yVel());
+            this.xSpeed += player.xVel() * 0.2;
+            didCollide = true;
+        }    
+        else if (collideLineCircle(bounds.xMin, bounds.yMax, bounds.xMax, bounds.yMax, this.x, this.y, this.d)) {
+            debugLog(`${player.color} bottom`);
+            this.ySpeed = abs(this.ySpeed) + max(0, player.yVel());
+            this.xSpeed += player.xVel() * 0.2;
+            didCollide = true;
+        }    
+        // general collision, in case paddle is moving really really fast
+        else if (collideRectCircle(bounds.xMin, bounds.yMin, player.truePaddleWidth, player.truePaddleHeight, this.x, this.y, this.d)) {
+            debugLog(`${player.color} rect`);
+            if (player.color == PlayerColor.RED) this.xSpeed = abs(this.xSpeed) * this.xDamp + player.xVel();
+            else this.xSpeed = -abs(this.xSpeed) * this.xDamp + player.xVel();
+            this.ySpeed += player.yVel();
+            didCollide = true;
+        }    
+
+        if (didCollide) {
+            this.minXSpeed *= this.xSpeedup;
+            this.maxXSpeed *= this.xSpeedup;
+            this.color = player.color;
+            this.lastCollidedWith = player.color;
+            this.bounceSound();
+        }
+
+        if (this.xSpeed < 0)
+            this.xSpeed = constrain(this.xSpeed, -this.maxXSpeed, -this.minXSpeed);
+        else
+            this.xSpeed = constrain(this.xSpeed, this.minXSpeed, this.maxXSpeed);
+        this.ySpeed = constrain(this.ySpeed, -this.maxYSpeed, this.maxYSpeed);
+    }
+}
+
+class Nosebox {
+    constructor(numNoses, x, y, w, h) {
+        this.numNoses = numNoses;
+        this.x = x;
+        this.y = y;
+        this.w = w;
+        this.h = h;
+
+        this.perimeter = this.w * 2 + this.h * 2;
+        this.positions = [];
+        this.secondsPerOrbit = this.numNoses;
+
+        this.rotation = 0;
+        this.rotIncr = 0.01;
+        this.maxRot = PI / 8;
+        
+        this.char = noseEmoji;
+
+        for (let i = 0; i < numNoses; i++) {
+            this.positions.push(this.perimeter * i / this.numNoses);
+        }
+    }
+
+    draw() {
+        let positionIncr = frameRate() ? this.perimeter / (this.secondsPerOrbit * frameRate()) : 0;
+        let x, y;
+
+        if (abs(this.rotation + this.rotIncr) >= this.maxRot) this.rotIncr *= -1;
+        this.rotation += this.rotIncr;
+
+        this.positions = this.positions.map(pos => (pos + positionIncr) % this.perimeter);
+
+        this.positions.forEach(pos => {
+            // top
+            if (pos < this.w) {
+                let offset = pos;
+                x = this.x - this.w / 2 + offset;
+                y = this.y - this.h / 2;
+            }
+            // right side
+            else if (pos < this.w + this.h) {
+                let offset = pos - this.w;
+                x = this.x + this.w / 2;
+                y = this.y - this.h / 2 + offset;
+            }
+            // bottom
+            else if (pos < this.w * 2 + this.h) {
+                let offset = pos - this.w - this.h;
+                x = this.x + this.w / 2 - offset;
+                y = this.y + this.h / 2;
+            }
+            // left side
+            else {
+                let offset = pos - this.w * 2 - this.h;
+                x = this.x - this.w / 2;
+                y = this.y + this.h / 2 - offset;
+            }
+            push();
+            textSize(48);
+            textAlign(CENTER);
+            translate(x, y);
+            rotate(this.rotation);
+            text(this.char, 0, 0);
+            pop();
+
+            if (this.char == noseEmoji) this.char = pigNoseEmoji;
+            else this.char = noseEmoji;
+        });
+    }
+}
