@@ -81,8 +81,8 @@ class Player {
 
         if (!face || !faceOval) { pop(); return; }
 
-        let mouthSizeRatio = (face.keypoints[14].y - face.keypoints[13].y)/height
-        this.sizeMult = map(mouthSizeRatio, 0, 0.2, 1, 1.3)
+        let mouthSizeRatio = (face.keypoints[14].y - face.keypoints[13].y)/height;
+        this.sizeMult = map(mouthSizeRatio, 0, 0.2, 1, 1.3);
 
         if (this.hasSunglasses) {
             let x = this.tx + faceOval.centerX;
