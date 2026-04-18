@@ -105,17 +105,19 @@ class Player {
 
     calibrate() {
         this.scale();
-        setTimeout(() => this.translate(), 500);
+        setTimeout(() => this.translate(), 250);
     }
 
     scale() {
         let faceOval = this.face.faceOval();
+        if (!faceOval) return;
         let faceScale = (height * 0.9) / faceOval.height;
         this.video.size(this.video.width * faceScale, this.video.height * faceScale);
     }
 
     translate() {
         let nose = this.face.nose();
+        if (!nose) return;
         this.lastNose = nose;
 
         this.tx = this.centerX - nose.x;

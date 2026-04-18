@@ -16,7 +16,8 @@ let elapsed;
 let buttons = [];
 let playerZoneWidth;
 
-let debug = true;
+let debug = false;
+let fillWindow = true;
 let paddleHeightRatio = 0.1;
 let paddleShapeRatio = 0.5;
 let canvasWidth = null; //1280;
@@ -66,8 +67,8 @@ function preload() {
 }
 
 function setup() {
-    let w = canvasWidth ? canvasWidth : windowWidth;
-    let h = canvasHeight ? canvasHeight : windowHeight;
+    let w = fillWindow ? windowWidth : canvasWidth;
+    let h = fillWindow ? windowHeight : canvasHeight;
 
     let canvas = createCanvas(w, h);
     canvas.isHidden = false;
@@ -93,8 +94,8 @@ function setup() {
 }
 
 function windowResized() {
-    let w = width === canvasWidth ? canvasWidth : windowWidth;
-    let h = height === canvasHeight ? canvasHeight : windowHeight;
+    let w = fillWindow ? windowWidth : canvasWidth;
+    let h = fillWindow ? windowHeight : canvasHeight;
 
     resizeCanvas(w, h);
 
@@ -443,6 +444,7 @@ function checkShowWebcam() {
 }
 
 function mousePressed() {
+    if (mouseButton !== LEFT) return;
     if (mouseX > 0 && mouseX < width && mouseY > 0 && mouseY < height) {
         let fs = fullscreen();
         fullscreen(!fs);
