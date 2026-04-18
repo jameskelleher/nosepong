@@ -16,7 +16,7 @@ let elapsed;
 let buttons = [];
 let playerZoneWidth;
 
-let debug = false;
+let debug = true;
 let paddleHeightRatio = 0.1;
 let paddleShapeRatio = 0.5;
 let canvasWidth = null; //1280;
@@ -93,10 +93,28 @@ function setup() {
 }
 
 function windowResized() {
-    let w = canvasWidth ? canvasWidth : windowWidth;
-    let h = canvasHeight ? canvasHeight : windowHeight;
+    let w = width === canvasWidth ? canvasWidth : windowWidth;
+    let h = height === canvasHeight ? canvasHeight : windowHeight;
 
     resizeCanvas(w, h);
+
+    playerZoneWidth = w * playerZoneWidthRatio;
+
+    player1.centerX = playerZoneWidth / 2;
+    player1.centerY = h / 2;
+    player2.centerX = w - playerZoneWidth / 2;
+    player2.centerY = h / 2;
+
+    player1.calibrate();
+    player2.calibrate();
+
+    paddleH = h * paddleHeightRatio;
+    paddleW = paddleH * paddleShapeRatio;
+
+    if (drawAttract.box) {
+        drawAttract.box.x = w / 2;
+        drawAttract.box.y = h / 5 - 20;
+    }
 }
 
 

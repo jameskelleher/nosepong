@@ -19,7 +19,7 @@ class Nosebox {
         this.char = noseEmoji;
 
         for (let i = 0; i < numNoses; i++) {
-            this.positions.push(this.perimeter * i / this.numNoses)
+            this.positions.push(this.perimeter * i / this.numNoses);
         }
     }
 
